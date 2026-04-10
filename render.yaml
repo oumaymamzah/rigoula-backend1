@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: ecommerce-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        scope: run
+        sync: false
+      - key: DB_HOST
+        scope: run
+        sync: false
+      - key: DB_NAME
+        value: rigoula
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        scope: run
+        sync: false
+      - key: EMAIL_USER
+        scope: run
+        sync: false
+      - key: EMAIL_PASSWORD
+        scope: run
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
