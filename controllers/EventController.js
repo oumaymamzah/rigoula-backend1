@@ -1,4 +1,5 @@
 const Event = require('../models/Event');
+const { saveUploadedMedia, deleteMediaByReference } = require('../services/mediaService');
 
 class EventController {
   static async getAllEvents(req, res) {
@@ -34,7 +35,9 @@ class EventController {
   static async createEvent(req, res) {
     try {
       const { titre, description, date_evenement, lieu } = req.body;
-      const image = req.file ? req.file.filename : null;
+      const image = req.file
+        ? await saveUploadedMedia(req.file, { type: 'event', uploadedBy: req.user?.id || null })
+        : null;
 
       if (!titre || !date_evenement) {
         return res.status(400).json({ message: 'Titre et date sont obligatoires' });
@@ -54,16 +57,25 @@ class EventController {
   static async updateEvent(req, res) {
     try {
       const { titre, description, date_evenement, lieu } = req.body;
-      const image = req.file ? req.file.filename : req.body.image;
+      const existingEvent = await Event.findById(req.params.id);
+      if (!existingEvent) {
+        return res.status(404).json({ message: 'Événement non trouvé' });
+      }
+
+      let image = req.body.image || existingEvent.image || null;
+      if (req.file) {
+        image = await saveUploadedMedia(req.file, { type: 'event', uploadedBy: req.user?.id || null });
+        if (existingEvent.image && existingEvent.image !== image) {
+          await deleteMediaByReference(existingEvent.image);
+        }
+      }
 
       if (!titre || !date_evenement) {
         return res.status(400).json({ message: 'Titre et date sont obligatoires' });
       }
 
       const updated = await Event.update(req.params.id, { titre, description, date_evenement, lieu, image });
-      if (!updated) {
-        return res.status(404).json({ message: 'Événement non trouvé' });
-      }
+      if (!updated) return res.status(404).json({ message: 'Événement non trouvé' });
       res.json({ success: true, message: 'Événement modifié avec succès' });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -73,10 +85,20 @@ class EventController {
 
   static async deleteEvent(req, res) {
     try {
+      const existingEvent = await Event.findById(req.params.id);
+      if (!existingEvent) {
+        return res.status(404).json({ message: 'Événement non trouvé' });
+      }
+
       const deleted = await Event.delete(req.params.id);
       if (!deleted) {
         return res.status(404).json({ message: 'Événement non trouvé' });
       }
+
+      if (existingEvent.image) {
+        await deleteMediaByReference(existingEvent.image);
+      }
+
       res.json({ success: true, message: 'Événement supprimé avec succès' });
     } catch (error) {
       res.status(500).json({ error: error.message });

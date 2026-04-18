@@ -1,24 +1,8 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 
-// Créer le dossier uploads s'il n'existe pas
-const uploadDir = './uploads/products';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configuration du stockage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Générer un nom unique pour l'image
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'product-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Stockage en mémoire pour persister les images directement en base MongoDB Atlas.
+const storage = multer.memoryStorage();
 
 // Filtrer les types de fichiers
 const fileFilter = (req, file, cb) => {

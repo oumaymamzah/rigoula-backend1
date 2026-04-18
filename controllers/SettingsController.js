@@ -1,4 +1,5 @@
 const Settings = require('../models/Settings');
+const { saveUploadedMedia, deleteMediaByReference } = require('../services/mediaService');
 
 const DEFAULT_SETTINGS = {
   site_name: 'Rigoula',
@@ -48,7 +49,23 @@ class SettingsController {
   static async updateSettings(req, res) {
     try {
       const settings = req.body;
+      const currentSettingsRows = await Settings.findAll();
+      const currentSettings = {};
+      currentSettingsRows.forEach((row) => {
+        currentSettings[row.setting_key] = row.setting_value;
+      });
+
       await Settings.update(settings);
+
+      const mediaKeys = ['site_logo', 'presentation_image'];
+      for (const key of mediaKeys) {
+        const previousValue = currentSettings[key];
+        const newValue = settings[key];
+        if (newValue && previousValue && previousValue !== newValue) {
+          await deleteMediaByReference(previousValue);
+        }
+      }
+
       res.json({ success: true, message: 'Paramètres mis à jour' });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -61,16 +78,25 @@ class SettingsController {
         return res.status(400).json({ message: 'Aucun fichier uploadé' });
       }
 
-      const logoUrl = `${req.protocol}://${req.get('host')}/uploads/products/${req.file.filename}`;
+      const currentSettings = await Settings.findAll();
+      const previousLogo = currentSettings.find((row) => row.setting_key === 'site_logo')?.setting_value;
 
-      // Sauvegarder l'URL du logo dans les paramètres
+      const logoUrl = await saveUploadedMedia(req.file, {
+        type: 'site_logo',
+        uploadedBy: req.user?.id || null
+      });
+
+      // Sauvegarder l'image logo directement dans MongoDB Atlas
       await Settings.update({ site_logo: logoUrl });
+
+      if (previousLogo && previousLogo !== logoUrl) {
+        await deleteMediaByReference(previousLogo);
+      }
 
       res.json({
         success: true,
         message: 'Logo uploadé et sauvegardé avec succès',
-        logoUrl: logoUrl,
-        filename: req.file.filename
+        logoUrl: logoUrl
       });
     } catch (error) {
       res.status(500).json({ error: error.message });

@@ -1,4 +1,5 @@
 const Product = require('../models/Product');
+const { deleteMediaByReference } = require('../services/mediaService');
 
 class ProductController {
   static async getAllProducts(req, res) {
@@ -40,10 +41,20 @@ class ProductController {
   static async updateProduct(req, res) {
     try {
       const productData = req.body;
+      const existingProduct = await Product.findById(req.params.id);
+      if (!existingProduct) {
+        return res.status(404).json({ message: 'Produit non trouvé' });
+      }
+
       const updated = await Product.update(req.params.id, productData);
       if (!updated) {
         return res.status(404).json({ message: 'Produit non trouvé' });
       }
+
+      if (existingProduct.image && existingProduct.image !== productData.image) {
+        await deleteMediaByReference(existingProduct.image);
+      }
+
       res.json({ success: true, message: 'Produit modifié avec succès' });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -52,10 +63,20 @@ class ProductController {
 
   static async deleteProduct(req, res) {
     try {
+      const existingProduct = await Product.findById(req.params.id);
+      if (!existingProduct) {
+        return res.status(404).json({ message: 'Produit non trouvé' });
+      }
+
       const deleted = await Product.delete(req.params.id);
       if (!deleted) {
         return res.status(404).json({ message: 'Produit non trouvé' });
       }
+
+      if (existingProduct.image) {
+        await deleteMediaByReference(existingProduct.image);
+      }
+
       res.json({ success: true, message: 'Produit supprimé avec succès' });
     } catch (error) {
       res.status(500).json({ error: error.message });
