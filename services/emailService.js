@@ -49,8 +49,8 @@ const sendWelcomeEmail = async ({ email, nom, prenom }) => {
   return sendEmail({
     to: email,
     subject: 'Confirmation d\'inscription - Rigoula',
-    text: `Bonjour ${fullName}, votre inscription a bien ete confirmee. Vous pouvez maintenant vous connecter a votre compte Rigoula.`,
-    html: `<p>Bonjour <strong>${fullName}</strong>,</p><p>Votre inscription sur <strong>Rigoula</strong> a bien ete <strong>confirmee</strong>.</p><p>Vous pouvez maintenant vous connecter a votre compte.</p><p>Merci de votre confiance.</p>`
+    text: `Bonjour ${fullName}, votre inscription a bien ete confirmée. Vous pouvez maintenant vous connecter a votre compte Rigoula.`,
+    html: `<p>Bonjour <strong>${fullName}</strong>,</p><p>Votre inscription sur <strong>Rigoula</strong> a bien été <strong>confirmée</strong>.</p><p>Vous pouvez maintenant vous connecter a votre compte.</p><p>Merci de votre confiance.</p>`
   });
 };
 
@@ -59,7 +59,7 @@ const sendOrderStatusEmail = async ({ email, orderId, statut }) => {
     to: email,
     subject: `Mise a jour commande #${orderId}`,
     text: `Le statut de votre commande #${orderId} est maintenant: ${statut}.`,
-    html: `<p>Le statut de votre commande <strong>#${orderId}</strong> a ete mis a jour.</p><p>Nouveau statut: <strong>${statut}</strong></p>`
+    html: `<p>Le statut de votre commande <strong>#${orderId}</strong> a été mis à jour.</p><p>Nouveau statut: <strong>${statut}</strong></p>`
   });
 };
 
