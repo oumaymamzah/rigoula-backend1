@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { toNumber } = require('../utils/mongoHelpers');
 const UserController = require('../controllers/UserController');
 const { verifyToken } = require('../middleware/auth');
 
@@ -26,35 +27,28 @@ router.put('/change-password', require('../middleware/auth').verifyToken, async 
       return res.status(400).json({ message: 'Ancien et nouveau mot de passe requis' });
     }
     
-    // Récupérer l'utilisateur
-    const sql = 'SELECT password FROM users WHERE id = ?';
-    db.query(sql, [req.user.id], async (err, results) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      
-      const user = results[0];
-      
-      // Vérifier l'ancien mot de passe
-      const isValid = await bcrypt.compare(oldPassword, user.password);
-      
-      if (!isValid) {
-        return res.status(401).json({ message: 'Ancien mot de passe incorrect' });
-      }
-      
-      // Hasher le nouveau mot de passe
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      // Mettre à jour
-      const updateSql = 'UPDATE users SET password = ? WHERE id = ?';
-      db.query(updateSql, [hashedPassword, req.user.id], (err) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ success: true, message: 'Mot de passe modifié avec succès' });
-      });
-    });
+    const db = await getDb();
+    const user = await db.collection('users').findOne({ id: toNumber(req.user.id) }, { projection: { password: 1 } });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    // Vérifier l'ancien mot de passe
+    const isValid = await bcrypt.compare(oldPassword, user.password);
+
+    if (!isValid) {
+      return res.status(401).json({ message: 'Ancien mot de passe incorrect' });
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db.collection('users').updateOne(
+      { id: toNumber(req.user.id) },
+      { $set: { password: hashedPassword } }
+    );
+
+    res.json({ success: true, message: 'Mot de passe modifié avec succès' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

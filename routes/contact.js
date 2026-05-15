@@ -11,25 +11,15 @@ router.get('/', verifyToken, isAdmin, ContactController.getAllContacts);
 
 // GET - Messages non lus (Admin)
 router.get('/unread', verifyToken, isAdmin, (req, res) => {
-  // This can be added to model/controller if needed
-  const db = require('../config/db');
-  const sql = "SELECT * FROM contacts WHERE statut = 'non_lu' ORDER BY created_at DESC";
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, data: results, count: results.length });
-  });
+  const { getDb } = require('../config/db');
+  getDb()
+    .then((db) => db.collection('contacts').find({ statut: 'non_lu' }).sort({ created_at: -1 }).toArray())
+    .then((results) => res.json({ success: true, data: results, count: results.length }))
+    .catch((err) => res.status(500).json({ error: err.message }));
 });
 
 // PUT - Changer le statut d'un message (Admin)
-router.put('/:id/status', verifyToken, isAdmin, (req, res) => {
-  const db = require('../config/db');
-  const { statut } = req.body;
-  const sql = 'UPDATE contacts SET statut = ? WHERE id = ?';
-  db.query(sql, [statut, req.params.id], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, message: 'Statut mis à jour' });
-  });
-});
+router.put('/:id/status', verifyToken, isAdmin, ContactController.updateContactStatus);
 
 // DELETE - Supprimer un message (Admin)
 router.delete('/:id', verifyToken, isAdmin, ContactController.deleteContact);

@@ -1,45 +1,68 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { nextId, startOfDay } = require('../utils/mongoHelpers');
 
 class Statistics {
   static async logVisit(visitData) {
     const { page, ip_address, user_agent } = visitData;
-    const sql = 'INSERT INTO visites (page, ip_address, user_agent) VALUES (?, ?, ?)';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [page, ip_address, user_agent], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.insertId);
-      });
+    const db = await getDb();
+    const id = await nextId(db, 'visites');
+    await db.collection('visites').insertOne({
+      id,
+      page,
+      ip_address,
+      user_agent,
+      visited_at: new Date()
     });
+    return id;
   }
 
   static async getDashboardStats() {
-    const queries = [
-      'SELECT COUNT(*) as total FROM users WHERE role = "client"',
-      'SELECT COUNT(*) as total FROM produits',
-      'SELECT COUNT(*) as total FROM commandes',
-      'SELECT SUM(total) as revenue FROM commandes WHERE statut != "annulee"',
-      'SELECT COUNT(*) as total FROM commandes WHERE statut = "en_attente"',
-      'SELECT COUNT(*) as total FROM contacts WHERE statut = "non_lu"',
-      'SELECT COUNT(*) as total FROM produits WHERE stock = 0',
-      'SELECT COUNT(*) as total FROM visites WHERE DATE(visited_at) = CURDATE()',
-      'SELECT COUNT(*) as total FROM visites WHERE MONTH(visited_at) = MONTH(CURDATE()) AND YEAR(visited_at) = YEAR(CURDATE())'
+    const db = await getDb();
+    const today = startOfDay(new Date());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const [
+      totalUsers,
+      totalProduits,
+      totalCommandes,
+      revenueRows,
+      pendingOrders,
+      unreadMessages,
+      outOfStock,
+      todayVisits,
+      monthVisits
+    ] = await Promise.all([
+      db.collection('users').countDocuments({ role: 'client' }),
+      db.collection('produits').countDocuments({}),
+      db.collection('commandes').countDocuments({}),
+      db.collection('commandes').aggregate([
+        { $match: { statut: { $ne: 'annulee' } } },
+        { $group: { _id: null, revenue: { $sum: '$total' } } }
+      ]).toArray(),
+      db.collection('commandes').countDocuments({ statut: 'en_attente' }),
+      db.collection('contacts').countDocuments({ statut: 'non_lu' }),
+      db.collection('produits').countDocuments({ stock: 0 }),
+      db.collection('visites').countDocuments({ visited_at: { $gte: today, $lt: tomorrow } }),
+      db.collection('visites').countDocuments({ visited_at: { $gte: monthStart, $lt: nextMonth } })
+    ]);
+
+    const revenue = revenueRows[0]?.revenue || 0;
+    return [
+      totalUsers,
+      totalProduits,
+      totalCommandes,
+      revenue,
+      pendingOrders,
+      unreadMessages,
+      outOfStock,
+      todayVisits,
+      monthVisits
     ];
-
-    const promises = queries.map((sql, index) => {
-      return new Promise((resolve, reject) => {
-        db.query(sql, (err, results) => {
-          if (err) {
-            console.error(`❌ Erreur requête ${index + 1}:`, sql, 'Erreur:', err.message);
-            resolve(0); // Retourner 0 en cas d'erreur plutôt que de rejeter
-          } else {
-            const value = results[0].total !== undefined ? results[0].total : (results[0].revenue || 0);
-            resolve(value);
-          }
-        });
-      });
-    });
-
-    return Promise.all(promises);
   }
 
   // Add other methods as needed

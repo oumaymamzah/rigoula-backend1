@@ -1,67 +1,69 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { nextId, stripMongoId, startOfDay, toNumber } = require('../utils/mongoHelpers');
 
 class Event {
   static async findAll() {
-    const sql = 'SELECT * FROM evenements ORDER BY date_evenement DESC';
-    return new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) resolve([]);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const rows = await db.collection('evenements').find({}).sort({ date_evenement: -1 }).toArray();
+    return rows.map(stripMongoId);
   }
 
   static async findUpcoming() {
-    const sql = 'SELECT * FROM evenements WHERE date_evenement >= CURDATE() ORDER BY date_evenement ASC';
-    return new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const today = startOfDay(new Date());
+    const rows = await db
+      .collection('evenements')
+      .find({ date_evenement: { $gte: today } })
+      .sort({ date_evenement: 1 })
+      .toArray();
+    return rows.map(stripMongoId);
   }
 
   static async findById(id) {
-    const sql = 'SELECT * FROM evenements WHERE id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [id], (err, results) => {
-        if (err) reject(err);
-        else resolve(results[0] || null);
-      });
-    });
+    const db = await getDb();
+    const row = await db.collection('evenements').findOne({ id: toNumber(id) });
+    return row ? stripMongoId(row) : null;
   }
 
   static async create(eventData) {
     const { titre, description, date_evenement, lieu, image } = eventData;
-    const sql = 'INSERT INTO evenements (titre, description, date_evenement, lieu, image) VALUES (?, ?, ?, ?, ?)';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [titre, description, date_evenement, lieu, image], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.insertId);
-      });
+    const db = await getDb();
+    const id = await nextId(db, 'evenements');
+    await db.collection('evenements').insertOne({
+      id,
+      titre,
+      description,
+      date_evenement: new Date(date_evenement),
+      lieu,
+      image,
+      created_at: new Date()
     });
+    return id;
   }
 
   static async update(id, eventData) {
     const { titre, description, date_evenement, lieu, image } = eventData;
-    const sql = 'UPDATE evenements SET titre=?, description=?, date_evenement=?, lieu=?, image=? WHERE id=?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [titre, description, date_evenement, lieu, image, id], (err, result) => {
-        if (err) resolve(false);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('evenements').updateOne(
+      { id: toNumber(id) },
+      {
+        $set: {
+          titre,
+          description,
+          date_evenement: new Date(date_evenement),
+          lieu,
+          image
+        }
+      }
+    );
+    return result.matchedCount > 0;
   }
 
 
   static async delete(id) {
-    const sql = 'DELETE FROM evenements WHERE id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('evenements').deleteOne({ id: toNumber(id) });
+    return result.deletedCount > 0;
   }
 }
 

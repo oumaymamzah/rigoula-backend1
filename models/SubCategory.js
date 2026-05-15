@@ -1,70 +1,64 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { nextId, stripMongoId, toNumber } = require('../utils/mongoHelpers');
 
 class SubCategory {
   static async findAll() {
-    const sql = `
-      SELECT sc.*, c.nom as categorie_nom
-      FROM sous_categories sc
-      LEFT JOIN categories c ON sc.category_id = c.id
-    `;
-    return new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const subCategories = await db.collection('sous_categories').find({}).toArray();
+    if (!subCategories.length) return [];
+
+    const categoryIds = [...new Set(subCategories.map((sc) => toNumber(sc.category_id)).filter((v) => v !== null && v !== undefined))];
+    const categories = categoryIds.length
+      ? await db.collection('categories').find({ id: { $in: categoryIds } }).toArray()
+      : [];
+    const categoryMap = new Map(categories.map((c) => [c.id, c.nom]));
+
+    return subCategories.map((sc) => ({
+      ...stripMongoId(sc),
+      categorie_nom: categoryMap.get(toNumber(sc.category_id)) || null
+    }));
   }
 
   static async findByCategoryId(categoryId) {
-    const sql = 'SELECT * FROM sous_categories WHERE category_id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [categoryId], (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const rows = await db.collection('sous_categories').find({ category_id: toNumber(categoryId) }).toArray();
+    return rows.map(stripMongoId);
   }
 
   static async findById(id) {
-    const sql = 'SELECT * FROM sous_categories WHERE id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [id], (err, results) => {
-        if (err) reject(err);
-        else resolve(results[0] || null);
-      });
-    });
+    const db = await getDb();
+    const row = await db.collection('sous_categories').findOne({ id: toNumber(id) });
+    return row ? stripMongoId(row) : null;
   }
 
   static async create(subCategoryData) {
     const { nom, description, category_id } = subCategoryData;
-    const sql = 'INSERT INTO sous_categories (nom, description, category_id) VALUES (?, ?, ?)';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [nom, description, category_id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.insertId);
-      });
+    const db = await getDb();
+    const id = await nextId(db, 'sous_categories');
+    await db.collection('sous_categories').insertOne({
+      id,
+      nom,
+      description,
+      category_id: toNumber(category_id),
+      created_at: new Date()
     });
+    return id;
   }
 
   static async update(id, subCategoryData) {
     const { nom, description, category_id } = subCategoryData;
-    const sql = 'UPDATE sous_categories SET nom=?, description=?, category_id=? WHERE id=?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [nom, description, category_id, id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('sous_categories').updateOne(
+      { id: toNumber(id) },
+      { $set: { nom, description, category_id: toNumber(category_id) } }
+    );
+    return result.matchedCount > 0;
   }
 
   static async delete(id) {
-    const sql = 'DELETE FROM sous_categories WHERE id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('sous_categories').deleteOne({ id: toNumber(id) });
+    return result.deletedCount > 0;
   }
 }
 

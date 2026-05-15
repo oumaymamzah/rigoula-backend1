@@ -11,20 +11,22 @@ services:
       - key: MONGODB_URI
         scope: run
         sync: false
-      - key: DB_HOST
-        scope: run
-        sync: false
-      - key: DB_NAME
+      - key: MONGODB_DB
         value: rigoula
       - key: PORT
         value: 10000
       - key: JWT_SECRET
         scope: run
         sync: false
-      - key: EMAIL_USER
+      - key: EMAIL_ENABLED
+        value: false
+      - key: GMAIL_USER
         scope: run
         sync: false
-      - key: EMAIL_PASSWORD
+      - key: GMAIL_APP_PASSWORD
+        scope: run
+        sync: false
+      - key: EMAIL_FROM
         scope: run
         sync: false
       - key: SMTP_HOST

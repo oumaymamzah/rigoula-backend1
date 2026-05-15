@@ -1,4 +1,10 @@
 const Cart = require('../models/Cart');
+const Product = require('../models/Product');
+
+const toPositiveInteger = (value) => {
+  const quantity = Number(value);
+  return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
+};
 
 class CartController {
   static async getCart(req, res) {
@@ -18,19 +24,25 @@ class CartController {
   static async addToCart(req, res) {
     try {
       const { produit_id, quantite } = req.body;
+      const quantity = toPositiveInteger(quantite);
 
-      // Check stock
-      const Product = require('../models/Product');
+      if (!produit_id || !quantity) {
+        return res.status(400).json({ message: 'Produit et quantite valide requis' });
+      }
+
       const product = await Product.findById(produit_id);
       if (!product) {
         return res.status(404).json({ message: 'Produit non trouvé' });
       }
-      if (product.stock < quantite) {
+      const existingItem = await Cart.findByUserAndProduct(req.user.id, produit_id);
+      const requestedTotal = Number(existingItem?.quantite || 0) + quantity;
+
+      if (Number(product.stock || 0) < requestedTotal) {
         return res.status(400).json({ message: 'Stock insuffisant' });
       }
 
-      const result = await Cart.addItem(req.user.id, produit_id, quantite);
-      res.json({ success: true, message: 'Produit ajouté au panier' });
+      await Cart.addItem(req.user.id, produit_id, quantity);
+      res.json({ success: true, message: 'Produit ajoute au panier' });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -39,11 +51,31 @@ class CartController {
   static async updateCartItem(req, res) {
     try {
       const { quantite } = req.body;
-      const updated = await Cart.updateQuantityById(req.params.id, req.user.id, quantite);
-      if (!updated) {
-        return res.status(404).json({ message: 'Produit non trouvé dans le panier' });
+      const quantity = toPositiveInteger(quantite);
+
+      if (!quantity) {
+        return res.status(400).json({ message: 'Quantite valide requise' });
       }
-      res.json({ success: true, message: 'Quantité mise à jour' });
+
+      const item = await Cart.findItemById(req.params.id, req.user.id);
+      if (!item) {
+        return res.status(404).json({ message: 'Produit non trouve dans le panier' });
+      }
+
+      const product = await Product.findById(item.produit_id);
+      if (!product) {
+        return res.status(404).json({ message: 'Produit non trouve' });
+      }
+
+      if (Number(product.stock || 0) < quantity) {
+        return res.status(400).json({ message: 'Stock insuffisant' });
+      }
+
+      const updated = await Cart.updateQuantityById(req.params.id, req.user.id, quantity);
+      if (!updated) {
+        return res.status(404).json({ message: 'Produit non trouve dans le panier' });
+      }
+      res.json({ success: true, message: 'Quantite mise a jour' });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

@@ -1,45 +1,49 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { nextId, stripMongoId, toNumber } = require('../utils/mongoHelpers');
 
 class Contact {
   static async create(contactData) {
-    const { nom, email, sujet, message } = contactData;
-    const sql = 'INSERT INTO contacts (nom, email, sujet, message) VALUES (?, ?, ?, ?)';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [nom, email, sujet, message], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.insertId);
-      });
+    const { nom, email, telephone, sujet, message } = contactData;
+    const db = await getDb();
+    const id = await nextId(db, 'contacts');
+    await db.collection('contacts').insertOne({
+      id,
+      nom,
+      email,
+      telephone: telephone || '',
+      sujet,
+      message,
+      statut: 'non_lu',
+      created_at: new Date()
     });
+    return id;
   }
 
   static async findAll() {
-    const sql = 'SELECT * FROM contacts ORDER BY created_at DESC';
-    return new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const rows = await db.collection('contacts').find({}).sort({ created_at: -1 }).toArray();
+    return rows.map(stripMongoId);
   }
 
   static async findById(id) {
-    const sql = 'SELECT * FROM contacts WHERE id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [id], (err, results) => {
-        if (err) reject(err);
-        else resolve(results[0] || null);
-      });
-    });
+    const db = await getDb();
+    const row = await db.collection('contacts').findOne({ id: toNumber(id) });
+    return row ? stripMongoId(row) : null;
   }
 
   static async delete(id) {
-    const sql = 'DELETE FROM contacts WHERE id = ?';
-    return new Promise((resolve, reject) => {
-      db.query(sql, [id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('contacts').deleteOne({ id: toNumber(id) });
+    return result.deletedCount > 0;
+  }
+
+  static async updateStatus(id, statut) {
+    const db = await getDb();
+    const result = await db.collection('contacts').updateOne(
+      { id: toNumber(id) },
+      { $set: { statut } }
+    );
+    return result.matchedCount > 0;
   }
 }
 

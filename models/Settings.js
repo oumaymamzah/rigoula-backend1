@@ -1,28 +1,25 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { stripMongoId } = require('../utils/mongoHelpers');
 
 class Settings {
   static async findAll() {
-    const sql = 'SELECT * FROM site_settings';
-    return new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const rows = await db.collection('site_settings').find({}).toArray();
+    return rows.map(stripMongoId);
   }
 
   static async update(settings) {
-    const promises = Object.keys(settings).map(key => {
-      return new Promise((resolve, reject) => {
-        const sql = 'UPDATE site_settings SET setting_value = ? WHERE setting_key = ?';
-        db.query(sql, [settings[key], key], (err, result) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    });
+    const db = await getDb();
+    const operations = Object.keys(settings).map((key) => ({
+      updateOne: {
+        filter: { setting_key: key },
+        update: { $set: { setting_value: settings[key] } },
+        upsert: true
+      }
+    }));
 
-    return Promise.all(promises);
+    if (!operations.length) return [];
+    return db.collection('site_settings').bulkWrite(operations);
   }
 }
 

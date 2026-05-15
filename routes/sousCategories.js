@@ -9,6 +9,9 @@ router.get('/', SubCategoryController.getAllSubCategories);
 // GET - Sous-catégories par catégorie
 router.get('/category/:categoryId', SubCategoryController.getSubCategoriesByCategory);
 
+// GET - Une sous-categorie par ID
+router.get('/:id', SubCategoryController.getSubCategoryById);
+
 // POST - Ajouter une sous-catégorie (Admin)
 router.post('/', verifyToken, isAdmin, SubCategoryController.createSubCategory);
 

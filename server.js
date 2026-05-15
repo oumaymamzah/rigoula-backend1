@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
-const db = require('./config/db');
+const { getDb } = require('./config/db');
 
 const app = express();
 
@@ -57,7 +57,17 @@ app.get('/', (req, res) => {
 
 // Démarrer le serveur
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📍 http://localhost:${PORT}`);
-});
+async function startServer() {
+  try {
+    await getDb();
+    app.listen(PORT, () => {
+      console.log(`Serveur demarre sur le port ${PORT}`);
+      console.log(`http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Connexion MongoDB impossible:', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();

@@ -1,80 +1,86 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
+const { nextId, stripMongoId, toNumber } = require('../utils/mongoHelpers');
 const bcrypt = require('bcryptjs');
 const hashPassword = require('../hashPassword');
 
 class User {
   static async findByEmail(email) {
-    return new Promise((resolve, reject) => {
-      const sql = 'SELECT * FROM users WHERE email = ?';
-      db.query(sql, [email], (err, results) => {
-        if (err) reject(err);
-        else resolve(results[0] || null);
-      });
-    });
+    const db = await getDb();
+    const user = await db.collection('users').findOne({ email });
+    return user ? stripMongoId(user) : null;
   }
 
   static async findById(id) {
-    return new Promise((resolve, reject) => {
-      const sql = 'SELECT id, nom, prenom, email, telephone, role, created_at FROM users WHERE id = ?';
-      db.query(sql, [id], (err, results) => {
-        if (err) reject(err);
-        else resolve(results[0] || null);
-      });
-    });
+    const db = await getDb();
+    const user = await db.collection('users').findOne(
+      { id: toNumber(id) },
+      { projection: { _id: 0, id: 1, nom: 1, prenom: 1, email: 1, telephone: 1, role: 1, created_at: 1 } }
+    );
+    return user || null;
   }
 
   static async findAll() {
-    return new Promise((resolve, reject) => {
-      const sql = 'SELECT id, nom, prenom, email, telephone, role, created_at FROM users';
-      db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const db = await getDb();
+    const users = await db
+      .collection('users')
+      .find({}, { projection: { _id: 0, id: 1, nom: 1, prenom: 1, email: 1, telephone: 1, role: 1, created_at: 1 } })
+      .toArray();
+    return users;
   }
 
   static async create(userData) {
     const { nom, prenom, email, password, telephone, role = 'client' } = userData;
     const hashedPassword = await hashPassword(password);
-    return new Promise((resolve, reject) => {
-      const sql = 'INSERT INTO users (nom, prenom, email, password, telephone, role) VALUES (?, ?, ?, ?, ?, ?)';
-      db.query(sql, [nom, prenom, email, hashedPassword, telephone, role], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.insertId);
-      });
+    const db = await getDb();
+    const id = await nextId(db, 'users');
+    await db.collection('users').insertOne({
+      id,
+      nom,
+      prenom,
+      email,
+      password: hashedPassword,
+      telephone,
+      role,
+      created_at: new Date()
     });
+    return id;
   }
 
   static async update(id, userData) {
-    const { nom, prenom, email, telephone, role } = userData;
-    return new Promise((resolve, reject) => {
-      const sql = 'UPDATE users SET nom=?, prenom=?, email=?, telephone=?, role=? WHERE id=?';
-      db.query(sql, [nom, prenom, email, telephone, role, id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const { nom, prenom, email, telephone, role, password } = userData;
+    const db = await getDb();
+    const updates = {};
+
+    if (nom !== undefined) updates.nom = nom;
+    if (prenom !== undefined) updates.prenom = prenom;
+    if (email !== undefined) updates.email = email;
+    if (telephone !== undefined) updates.telephone = telephone;
+    if (role !== undefined) updates.role = role;
+    if (password) updates.password = await hashPassword(password);
+
+    if (!Object.keys(updates).length) return false;
+
+    const result = await db.collection('users').updateOne(
+      { id: toNumber(id) },
+      { $set: updates }
+    );
+    return result.matchedCount > 0;
   }
 
   static async updateProfile(id, profileData) {
     const { nom, prenom, telephone } = profileData;
-    return new Promise((resolve, reject) => {
-      const sql = 'UPDATE users SET nom=?, prenom=?, telephone=? WHERE id=?';
-      db.query(sql, [nom, prenom, telephone, id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('users').updateOne(
+      { id: toNumber(id) },
+      { $set: { nom, prenom, telephone } }
+    );
+    return result.matchedCount > 0;
   }
 
   static async delete(id) {
-    return new Promise((resolve, reject) => {
-      const sql = 'DELETE FROM users WHERE id = ?';
-      db.query(sql, [id], (err, result) => {
-        if (err) reject(err);
-        else resolve(result.affectedRows > 0);
-      });
-    });
+    const db = await getDb();
+    const result = await db.collection('users').deleteOne({ id: toNumber(id) });
+    return result.deletedCount > 0;
   }
 
   static async verifyPassword(plainPassword, hashedPassword) {

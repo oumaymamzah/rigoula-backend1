@@ -152,8 +152,8 @@ class UserController {
 
   static async updateUser(req, res) {
     try {
-      const { nom, prenom, email, telephone, role } = req.body;
-      const updated = await User.update(req.params.id, { nom, prenom, email, telephone, role });
+      const { nom, prenom, email, telephone, role, password } = req.body;
+      const updated = await User.update(req.params.id, { nom, prenom, email, telephone, role, password });
       if (!updated) {
         return res.status(404).json({ message: 'Utilisateur non trouvé' });
       }

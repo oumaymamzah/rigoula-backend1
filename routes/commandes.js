@@ -21,4 +21,7 @@ router.get('/', verifyToken, isAdmin, OrderController.getAllOrders);
 // PUT - Changer le statut d'une commande (Admin)
 router.put('/:id/status', verifyToken, isAdmin, OrderController.updateOrderStatus);
 
+// DELETE - Supprimer une commande (Admin)
+router.delete('/:id', verifyToken, isAdmin, OrderController.deleteOrder);
+
 module.exports = router;

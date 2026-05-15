@@ -1,104 +1,78 @@
-const Order = require('../models/Order');
-const Cart = require('../models/Cart');
-const User = require('../models/User');
 const { sendOrderStatusEmail } = require('../services/emailService');
+const { nextId, toNumber } = require('../utils/mongoHelpers');
 
 class OrderController {
   static async getAllOrders(req, res) {
     try {
-      const db = require('../config/db');
-      
-      const sqlCommandes = `
-        SELECT DISTINCT c.id,
-               c.user_id,
-               c.total,
-               c.statut,
-               c.created_at,
-               c.adresse_livraison,
-               c.telephone_contact,
-               u.email
-        FROM commandes c
-        LEFT JOIN users u ON c.user_id = u.id
-        ORDER BY c.created_at DESC
-      `;
+      const { getDb } = require('../config/db');
+      const mongoDb = await getDb();
 
-      db.query(sqlCommandes, async (err, commandes) => {
-        try {
-          if (err) {
-            console.error('❌ Erreur requête commandes:', err);
-            return res.status(500).json({ error: err.message });
-          }
+      const [commandes, users] = await Promise.all([
+        mongoDb.collection('commandes').find({}).sort({ created_at: -1 }).toArray(),
+        mongoDb.collection('users').find({}, { projection: { _id: 0, id: 1, email: 1 } }).toArray()
+      ]);
 
-          if (!commandes || commandes.length === 0) {
-            console.log('⚠️ Aucune commande trouvée');
-            return res.json({ success: true, data: [] });
-          }
+      if (!commandes || commandes.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
 
-          const resultatsFinaux = [];
+      const userMap = new Map(users.map((u) => [u.id, u.email]));
+      const commandeIds = commandes.map((c) => c.id);
 
-          for (let commande of commandes) {
-            try {
-              const sqlCount = `
-                SELECT COUNT(*) as nb_produits
-                FROM commande_details
-                WHERE commande_id = ?
-              `;
+      const details = await mongoDb
+        .collection('commande_details')
+        .find({ commande_id: { $in: commandeIds } })
+        .toArray();
 
-              const countResult = await new Promise((resolve, reject) => {
-                db.query(sqlCount, [commande.id], (err, result) => {
-                  if (err) reject(err);
-                  else resolve(result[0]?.nb_produits || 0);
-                });
-              });
-
-              const sqlProduits = `
-                SELECT cd.id,
-                       cd.produit_id,
-                       cd.quantite,
-                       cd.prix_unitaire,
-                       CAST(cd.prix_unitaire AS DECIMAL(10,2)) as prix,
-                       CAST(cd.prix_unitaire * cd.quantite AS DECIMAL(10,2)) as sousTotal,
-                       pr.nom
-                FROM commande_details cd
-                LEFT JOIN produits pr ON cd.produit_id = pr.id
-                WHERE cd.commande_id = ?
-              `;
-
-              const produits = await new Promise((resolve, reject) => {
-                db.query(sqlProduits, [commande.id], (err, results) => {
-                  if (err) reject(err);
-                  else resolve(results || []);
-                });
-              });
-
-              const adresseParts = (commande.adresse_livraison || '').split('###');
-
-              resultatsFinaux.push({
-                id: commande.id,
-                user_id: commande.user_id,
-                total: commande.total,
-                statut: commande.statut,
-                created_at: commande.created_at,
-                adresse_livraison: commande.adresse_livraison,
-                telephone_contact: commande.telephone_contact,
-                email: commande.email,
-                nom: adresseParts[0] || '',
-                prenom: adresseParts[1] || '',
-                adresse: adresseParts[2] || '',
-                nb_produits: countResult,
-                produits: produits
-              });
-            } catch (itemErr) {
-              console.error('❌ Erreur traitement commande', commande.id, ':', itemErr.message);
-            }
-          }
-
-          res.json({ success: true, data: resultatsFinaux });
-        } catch (err) {
-          console.error('❌ Erreur dans le callback:', err.message);
-          res.status(500).json({ error: err.message });
-        }
+      const detailByCommande = new Map();
+      details.forEach((detail) => {
+        const key = toNumber(detail.commande_id);
+        if (!detailByCommande.has(key)) detailByCommande.set(key, []);
+        detailByCommande.get(key).push(detail);
       });
+
+      const productIds = [...new Set(details.map((d) => toNumber(d.produit_id)))];
+      const products = productIds.length
+        ? await mongoDb.collection('produits').find({ id: { $in: productIds } }).toArray()
+        : [];
+      const productMap = new Map(products.map((p) => [p.id, p.nom]));
+
+      const resultatsFinaux = commandes.map((commande) => {
+        const orderDetails = detailByCommande.get(toNumber(commande.id)) || [];
+        const adresseParts = String(commande.adresse_livraison || '').split('###');
+
+        const produits = orderDetails.map((detail) => {
+          const prix = Number(detail.prix_unitaire || 0);
+          const quantite = Number(detail.quantite || 0);
+          return {
+            id: detail.id,
+            produit_id: detail.produit_id,
+            quantite,
+            prix_unitaire: prix,
+            prix,
+            sousTotal: prix * quantite,
+            nom: productMap.get(toNumber(detail.produit_id)) || null
+          };
+        });
+
+        return {
+          id: commande.id,
+          user_id: commande.user_id,
+          total: commande.total,
+          statut: commande.statut,
+          created_at: commande.created_at,
+          adresse_livraison: commande.adresse_livraison,
+          telephone_contact: commande.telephone_contact,
+          email: userMap.get(commande.user_id) || null,
+          nom: adresseParts[0] || '',
+          prenom: adresseParts[1] || '',
+          adresse: adresseParts[2] || '',
+          nb_produits: orderDetails.length,
+          produits
+        };
+      });
+
+      res.json({ success: true, data: resultatsFinaux });
     } catch (error) {
       console.error('❌ Erreur getAllOrders:', error.message);
       res.status(500).json({ error: error.message });
@@ -107,96 +81,74 @@ class OrderController {
 
   static async getUserOrders(req, res) {
     try {
-      const db = require('../config/db');
-      const sql = `
-        SELECT c.id,
-               c.user_id,
-               c.total,
-               c.statut,
-               c.created_at,
-               c.adresse_livraison,
-               c.telephone_contact
-        FROM commandes c
-        WHERE c.user_id = ?
-        ORDER BY c.created_at DESC
-      `;
+      const { getDb } = require('../config/db');
+      const mongoDb = await getDb();
+      const userId = toNumber(req.user.id);
 
-      db.query(sql, [req.user.id], async (err, commandes) => {
-        try {
-          if (err) {
-            console.error('❌ Erreur requête commandes utilisateur:', err);
-            return res.status(500).json({ error: err.message });
-          }
+      const commandes = await mongoDb
+        .collection('commandes')
+        .find({ user_id: userId })
+        .sort({ created_at: -1 })
+        .toArray();
 
-          if (!commandes || commandes.length === 0) {
-            console.log('⚠️ Aucune commande pour utilisateur', req.user.id);
-            return res.json({ success: true, data: [] });
-          }
+      if (!commandes || commandes.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
 
-          const resultatsFinaux = [];
+      const commandeIds = commandes.map((c) => c.id);
+      const details = await mongoDb
+        .collection('commande_details')
+        .find({ commande_id: { $in: commandeIds } })
+        .toArray();
 
-          for (let commande of commandes) {
-            try {
-              const sqlCount = `
-                SELECT COUNT(*) as nb_produits
-                FROM commande_details
-                WHERE commande_id = ?
-              `;
-
-              const countResult = await new Promise((resolve, reject) => {
-                db.query(sqlCount, [commande.id], (err, result) => {
-                  if (err) reject(err);
-                  else resolve(result[0]?.nb_produits || 0);
-                });
-              });
-
-              const sqlProduits = `
-                SELECT cd.id,
-                       cd.produit_id,
-                       cd.quantite,
-                       cd.prix_unitaire,
-                       CAST(cd.prix_unitaire AS DECIMAL(10,2)) as prix,
-                       CAST(cd.prix_unitaire * cd.quantite AS DECIMAL(10,2)) as sousTotal,
-                       pr.nom
-                FROM commande_details cd
-                LEFT JOIN produits pr ON cd.produit_id = pr.id
-                WHERE cd.commande_id = ?
-              `;
-
-              const produits = await new Promise((resolve, reject) => {
-                db.query(sqlProduits, [commande.id], (err, results) => {
-                  if (err) reject(err);
-                  else resolve(results || []);
-                });
-              });
-
-              const adresseParts = (commande.adresse_livraison || '').split('###');
-
-              resultatsFinaux.push({
-                id: commande.id,
-                user_id: commande.user_id,
-                total: commande.total,
-                statut: commande.statut,
-                created_at: commande.created_at,
-                adresse_livraison: commande.adresse_livraison,
-                telephone_contact: commande.telephone_contact,
-                nom: adresseParts[0] || '',
-                prenom: adresseParts[1] || '',
-                adresse: adresseParts[2] || '',
-                nb_produits: countResult,
-                produits: produits
-              });
-            } catch (itemErr) {
-              console.error('❌ Erreur traitement commande utilisateur', commande.id, ':', itemErr.message);
-            }
-          }
-
-          res.json({ success: true, data: resultatsFinaux });
-        } catch (err) {
-          console.error('❌ Erreur dans le callback getUserOrders:', err.message);
-          res.status(500).json({ error: err.message });
-        }
+      const detailByCommande = new Map();
+      details.forEach((detail) => {
+        const key = toNumber(detail.commande_id);
+        if (!detailByCommande.has(key)) detailByCommande.set(key, []);
+        detailByCommande.get(key).push(detail);
       });
+
+      const productIds = [...new Set(details.map((d) => toNumber(d.produit_id)))];
+      const products = productIds.length
+        ? await mongoDb.collection('produits').find({ id: { $in: productIds } }).toArray()
+        : [];
+      const productMap = new Map(products.map((p) => [p.id, p.nom]));
+
+      const resultatsFinaux = commandes.map((commande) => {
+        const orderDetails = detailByCommande.get(toNumber(commande.id)) || [];
+        const adresseParts = String(commande.adresse_livraison || '').split('###');
+
+        const produits = orderDetails.map((detail) => {
+          const prix = Number(detail.prix_unitaire || 0);
+          const quantite = Number(detail.quantite || 0);
+          return {
+            id: detail.id,
+            produit_id: detail.produit_id,
+            quantite,
+            prix_unitaire: prix,
+            prix,
+            sousTotal: prix * quantite,
+            nom: productMap.get(toNumber(detail.produit_id)) || null
+          };
+        });
+
+        return {
+          id: commande.id,
+          user_id: commande.user_id,
+          total: commande.total,
+          statut: commande.statut,
+          created_at: commande.created_at,
+          adresse_livraison: commande.adresse_livraison,
+          telephone_contact: commande.telephone_contact,
+          nom: adresseParts[0] || '',
+          prenom: adresseParts[1] || '',
+          adresse: adresseParts[2] || '',
+          nb_produits: orderDetails.length,
+          produits
+        };
+      });
+
+      res.json({ success: true, data: resultatsFinaux });
     } catch (error) {
       console.error('❌ Erreur getUserOrders:', error.message);
       res.status(500).json({ error: error.message });
@@ -205,10 +157,16 @@ class OrderController {
 
   static async getOrderById(req, res) {
     try {
-      const order = await Order.findById(req.params.id);
+      const { getDb } = require('../config/db');
+      const mongoDb = await getDb();
+      const order = await mongoDb.collection('commandes').findOne({ id: toNumber(req.params.id) });
       if (!order) {
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
+      if (req.user?.role !== 'admin' && toNumber(order.user_id) !== toNumber(req.user.id)) {
+        return res.status(403).json({ message: 'Acces refuse' });
+      }
+      delete order._id;
       res.json({ success: true, data: order });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -218,77 +176,71 @@ class OrderController {
   static async createOrder(req, res) {
     try {
       const { adresse_livraison, telephone_contact, nom, prenom } = req.body;
-      const db = require('../config/db');
+      const { getDb } = require('../config/db');
+      const mongoDb = await getDb();
+      const userId = toNumber(req.user.id);
 
-      // Get cart
-      const getPanierSql = `
-        SELECT p.*, pr.prix, pr.stock, pr.nom
-        FROM panier p
-        JOIN produits pr ON p.produit_id = pr.id
-        WHERE p.user_id = ?
-      `;
+      const panierItems = await mongoDb.collection('panier').find({ user_id: userId }).toArray();
+      if (!panierItems.length) {
+        return res.status(400).json({ message: 'Le panier est vide' });
+      }
 
-      db.query(getPanierSql, [req.user.id], (err, panierItems) => {
-        if (err) return res.status(500).json({ error: err.message });
+      const productIds = [...new Set(panierItems.map((p) => toNumber(p.produit_id)))];
+      const products = await mongoDb.collection('produits').find({ id: { $in: productIds } }).toArray();
+      const productMap = new Map(products.map((p) => [p.id, p]));
 
-        if (panierItems.length === 0) {
-          return res.status(400).json({ message: 'Le panier est vide' });
+      for (const item of panierItems) {
+        const product = productMap.get(toNumber(item.produit_id));
+        if (!product) {
+          return res.status(404).json({ message: 'Produit non trouvé' });
         }
-
-        // Check stock
-        for (let item of panierItems) {
-          if (item.stock < item.quantite) {
-            return res.status(400).json({ message: `Stock insuffisant pour ${item.nom}` });
-          }
+        if (Number(product.stock || 0) < Number(item.quantite || 0)) {
+          return res.status(400).json({ message: `Stock insuffisant pour ${product.nom}` });
         }
+      }
 
-        // Calculate total
-        const total = panierItems.reduce((sum, item) => sum + (item.prix * item.quantite), 0);
+      const total = panierItems.reduce((sum, item) => {
+        const product = productMap.get(toNumber(item.produit_id)) || {};
+        return sum + Number(product.prix || 0) * Number(item.quantite || 0);
+      }, 0);
 
-        // Create order
-        const adresseAvecNom = (nom || '') + '###' + (prenom || '') + '###' + (adresse_livraison || '');
+      const adresseAvecNom = `${nom || ''}###${prenom || ''}###${adresse_livraison || ''}`;
+      const commandeId = await nextId(mongoDb, 'commandes');
 
-        const createCommandeSql = 'INSERT INTO commandes (user_id, total, adresse_livraison, telephone_contact) VALUES (?, ?, ?, ?)';
+      await mongoDb.collection('commandes').insertOne({
+        id: commandeId,
+        user_id: userId,
+        total,
+        statut: 'en_attente',
+        adresse_livraison: adresseAvecNom,
+        telephone_contact,
+        created_at: new Date()
+      });
 
-        db.query(createCommandeSql, [req.user.id, total, adresseAvecNom, telephone_contact], (err, result) => {
-          if (err) return res.status(500).json({ error: err.message });
-
-          const commandeId = result.insertId;
-
-          // Add details
-          const detailsPromises = panierItems.map(item => {
-            return new Promise((resolve, reject) => {
-              const insertDetailSql = 'INSERT INTO commande_details (commande_id, produit_id, quantite, prix_unitaire) VALUES (?, ?, ?, ?)';
-              db.query(insertDetailSql, [commandeId, item.produit_id, item.quantite, item.prix], (err) => {
-                if (err) reject(err);
-
-                // Decrease stock
-                const updateStockSql = 'UPDATE produits SET stock = stock - ? WHERE id = ?';
-                db.query(updateStockSql, [item.quantite, item.produit_id], (err) => {
-                  if (err) reject(err);
-                  resolve();
-                });
-              });
-            });
-          });
-
-          Promise.all(detailsPromises)
-            .then(() => {
-              // Clear cart
-              const clearPanierSql = 'DELETE FROM panier WHERE user_id = ?';
-              db.query(clearPanierSql, [req.user.id], (err) => {
-                if (err) return res.status(500).json({ error: err.message });
-
-                res.status(201).json({
-                  success: true,
-                  message: 'Commande créée avec succès',
-                  commandeId,
-                  total
-                });
-              });
-            })
-            .catch(err => res.status(500).json({ error: err.message }));
+      for (const item of panierItems) {
+        const product = productMap.get(toNumber(item.produit_id)) || {};
+        const detailId = await nextId(mongoDb, 'commande_details');
+        await mongoDb.collection('commande_details').insertOne({
+          id: detailId,
+          commande_id: commandeId,
+          produit_id: toNumber(item.produit_id),
+          quantite: Number(item.quantite || 0),
+          prix_unitaire: Number(product.prix || 0)
         });
+
+        await mongoDb.collection('produits').updateOne(
+          { id: toNumber(item.produit_id) },
+          { $inc: { stock: -Number(item.quantite || 0) } }
+        );
+      }
+
+      await mongoDb.collection('panier').deleteMany({ user_id: userId });
+
+      res.status(201).json({
+        success: true,
+        message: 'Commande créée avec succès',
+        commandeId,
+        total
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -298,17 +250,23 @@ class OrderController {
   static async updateOrderStatus(req, res) {
     try {
       const { statut } = req.body;
-      const order = await Order.findById(req.params.id);
+      const { getDb } = require('../config/db');
+      const mongoDb = await getDb();
+      const orderId = toNumber(req.params.id);
+      const order = await mongoDb.collection('commandes').findOne({ id: orderId });
       if (!order) {
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
 
-      const updated = await Order.updateStatus(req.params.id, statut);
-      if (!updated) {
+      const updateResult = await mongoDb.collection('commandes').updateOne(
+        { id: orderId },
+        { $set: { statut } }
+      );
+      if (!updateResult.matchedCount) {
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
 
-      const user = await User.findById(order.user_id);
+      const user = await mongoDb.collection('users').findOne({ id: toNumber(order.user_id) });
       if (user?.email) {
         sendOrderStatusEmail({
           email: user.email,
@@ -327,8 +285,14 @@ class OrderController {
 
   static async deleteOrder(req, res) {
     try {
-      const deleted = await Order.delete(req.params.id);
-      if (!deleted) {
+      const { getDb } = require('../config/db');
+      const mongoDb = await getDb();
+      const orderId = toNumber(req.params.id);
+
+      const orderResult = await mongoDb.collection('commandes').deleteOne({ id: orderId });
+      await mongoDb.collection('commande_details').deleteMany({ commande_id: orderId });
+
+      if (!orderResult.deletedCount) {
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
       res.json({ success: true, message: 'Commande supprimée' });

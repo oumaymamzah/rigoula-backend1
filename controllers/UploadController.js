@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const { getDb } = require('../config/db');
 const { saveUploadedMedia, deleteMediaByReference } = require('../services/mediaService');
 
 class UploadController {
@@ -30,42 +30,31 @@ class UploadController {
         return res.status(400).json({ message: 'Aucun fichier uploadé' });
       }
 
-      const previousLogo = await new Promise((resolve) => {
-        db.query('SELECT * FROM site_settings', (err, results) => {
-          if (err || !Array.isArray(results)) {
-            resolve(null);
-            return;
-          }
-          const logoSetting = results.find((row) => row.setting_key === 'site_logo');
-          resolve(logoSetting?.setting_value || null);
-        });
-      });
+      const db = await getDb();
+      const previousLogoRow = await db.collection('site_settings').findOne({ setting_key: 'site_logo' });
+      const previousLogo = previousLogoRow?.setting_value || null;
 
       const logoUrl = await saveUploadedMedia(req.file, {
         type: 'site_logo',
         uploadedBy: req.user?.id || null
       });
 
-      db.query(
-        'UPDATE site_settings SET setting_value = ? WHERE setting_key = ?',
-        [logoUrl, 'site_logo'],
-        async (err) => {
-          if (err) {
-            return res.status(500).json({ success: false, error: err.message });
-          }
-
-          if (previousLogo && previousLogo !== logoUrl) {
-            await deleteMediaByReference(previousLogo);
-          }
-
-          res.json({
-            success: true,
-            message: 'Logo uploadé et sauvegardé avec succès',
-            logoUrl: logoUrl,
-            data: { logoPath: logoUrl }
-          });
-        }
+      await db.collection('site_settings').updateOne(
+        { setting_key: 'site_logo' },
+        { $set: { setting_value: logoUrl } },
+        { upsert: true }
       );
+
+      if (previousLogo && previousLogo !== logoUrl) {
+        await deleteMediaByReference(previousLogo);
+      }
+
+      res.json({
+        success: true,
+        message: 'Logo uploadé et sauvegardé avec succès',
+        logoUrl: logoUrl,
+        data: { logoPath: logoUrl }
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -80,16 +69,9 @@ class UploadController {
         });
       }
 
-      const previousImage = await new Promise((resolve) => {
-        db.query('SELECT * FROM site_settings', (err, results) => {
-          if (err || !Array.isArray(results)) {
-            resolve(null);
-            return;
-          }
-          const imageSetting = results.find((row) => row.setting_key === 'presentation_image');
-          resolve(imageSetting?.setting_value || null);
-        });
-      });
+      const db = await getDb();
+      const previousImageRow = await db.collection('site_settings').findOne({ setting_key: 'presentation_image' });
+      const previousImage = previousImageRow?.setting_value || null;
 
       const imageUrl = await saveUploadedMedia(req.file, {
         type: 'presentation_image',
@@ -98,31 +80,21 @@ class UploadController {
 
       console.log('📸 Image URL:', imageUrl);
 
-      db.query(
-        'UPDATE site_settings SET setting_value = ? WHERE setting_key = ?',
-        [imageUrl, 'presentation_image'],
-        async (err, result) => {
-          if (err) {
-            console.error('❌ DB Error:', err.message);
-            return res.status(500).json({ 
-              success: false, 
-              error: err.message 
-            });
-          }
-
-          if (previousImage && previousImage !== imageUrl) {
-            await deleteMediaByReference(previousImage);
-          }
-
-          console.log('✅ UPDATE OK:', result.affectedRows, 'ligne(s) modifiée(s)');
-
-          res.json({
-            success: true,
-            message: 'Image de présentation uploadée avec succès',
-            data: { imagePath: imageUrl }
-          });
-        }
+      await db.collection('site_settings').updateOne(
+        { setting_key: 'presentation_image' },
+        { $set: { setting_value: imageUrl } },
+        { upsert: true }
       );
+
+      if (previousImage && previousImage !== imageUrl) {
+        await deleteMediaByReference(previousImage);
+      }
+
+      res.json({
+        success: true,
+        message: 'Image de présentation uploadée avec succès',
+        data: { imagePath: imageUrl }
+      });
 
     } catch (error) {
       console.error('❌ ERREUR:', error.message);

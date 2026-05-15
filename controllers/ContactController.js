@@ -52,6 +52,26 @@ class ContactController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  static async updateContactStatus(req, res) {
+    try {
+      const { statut } = req.body;
+      const allowedStatuses = ['non_lu', 'lu', 'traite'];
+
+      if (!allowedStatuses.includes(statut)) {
+        return res.status(400).json({ message: 'Statut invalide' });
+      }
+
+      const updated = await Contact.updateStatus(req.params.id, statut);
+      if (!updated) {
+        return res.status(404).json({ message: 'Message non trouve' });
+      }
+
+      res.json({ success: true, message: 'Statut mis a jour' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 module.exports = ContactController;
