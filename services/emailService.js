@@ -7,16 +7,16 @@ const isEmailEnabled = () => String(process.env.EMAIL_ENABLED || 'false').toLowe
 const getTransporter = () => {
   if (transporter) return transporter;
 
-  const user = process.env.GMAIL_USER;
-  const pass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 
-  if (!user || !pass) {
+  if (!gmailUser || !gmailPass) {
     throw new Error('Configuration Gmail manquante: GMAIL_USER / GMAIL_APP_PASSWORD');
   }
 
   transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user, pass }
+    auth: { user: gmailUser, pass: gmailPass }
   });
 
   return transporter;

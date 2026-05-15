@@ -9,7 +9,18 @@ router.get('/top-produits-stats', async (req, res) => {
     console.log('📊 Requête top-produits-stats reçue');
     const db = await getDb();
 
+    const validOrders = await db.collection('commandes').find(
+      { statut: { $ne: 'annulee' } },
+      { projection: { _id: 0, id: 1 } }
+    ).toArray();
+    const validOrderIds = validOrders.map((o) => o.id);
+
+    if (!validOrderIds.length) {
+      return res.json([]);
+    }
+
     const grouped = await db.collection('commande_details').aggregate([
+      { $match: { commande_id: { $in: validOrderIds } } },
       {
         $group: {
           _id: '$produit_id',
