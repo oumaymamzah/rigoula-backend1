@@ -40,10 +40,17 @@ router.get('/top-produits-stats', async (req, res) => {
     const products = await db.collection('produits').find({ id: { $in: productIds } }).toArray();
     const productMap = new Map(products.map((p) => [p.id, p.nom]));
 
-    const totalVendu = grouped.reduce((acc, r) => acc + (Number(r.total_vendu) || 0), 0);
-    const max = Math.max(1, Number(grouped[0]?.total_vendu) || 1);
+    // Filtrer les produits qui n'existent plus (supprimés)
+    const validGrouped = grouped.filter((g) => productMap.has(toNumber(g._id)));
 
-    const result = grouped.map((r) => {
+    if (!validGrouped.length) {
+      return res.json([]);
+    }
+
+    const totalVendu = validGrouped.reduce((acc, r) => acc + (Number(r.total_vendu) || 0), 0);
+    const max = Math.max(1, Number(validGrouped[0]?.total_vendu) || 1);
+
+    const result = validGrouped.map((r) => {
       const total = Number(r.total_vendu) || 0;
       return {
         name: String(productMap.get(toNumber(r._id)) || '').trim(),

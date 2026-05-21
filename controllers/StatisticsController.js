@@ -43,8 +43,7 @@ class StatisticsController {
           pendingOrders,
           unreadMessages,
           outOfStock,
-          todayVisits,
-          monthVisits
+    
         }
       });
     } catch (error) {
