@@ -2,7 +2,7 @@ const nodemailer = require('nodemailer');
 
 let transporter;
 
-const isEmailEnabled = () => String(process.env.EMAIL_ENABLED || 'false').toLowerCase() === 'true';
+const isEmailEnabled = () => String(process.env.EMAIL_ENABLED || 'true').toLowerCase() === 'true';
 
 const getTransporter = () => {
   if (transporter) return transporter;
@@ -49,18 +49,38 @@ const sendWelcomeEmail = async ({ email, nom, prenom }) => {
 
   return sendEmail({
     to: email,
-    subject: 'Confirmation d’inscription - Rigoula',
-    text: `Bonjour ${fullName}, votre inscription a bien été confirmée. Vous pouvez maintenant vous connecter à votre compte Rigoula.`,
-    html: `<p>Bonjour <strong>${fullName}</strong>,</p><p>Votre inscription sur <strong>Rigoula</strong> a bien été <strong>confirmée</strong>.</p><p>Vous pouvez maintenant vous connecter à votre compte.</p><p>Merci de votre confiance.</p>`
+    subject: 'Bienvenue sur Rigoula !',
+    text: `Bonjour ${fullName}, bienvenue sur Rigoula ! Votre compte a été créé avec succès. Connectez-vous maintenant et commencez à explorer nos produits.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #000;">Bienvenue sur Rigoula !</h2>
+        <p style="font-size: 16px; color: #333;">Bonjour <strong>${fullName}</strong>,</p>
+        <p style="font-size: 16px; color: #333;">Votre inscription a été confirmée avec succès !</p>
+        <p style="font-size: 16px; color: #333;">Vous pouvez maintenant vous connecter à votre compte et découvrir tous nos produits et services.</p>
+        <p style="font-size: 14px; color: #666;">Merci de votre confiance !</p>
+      </div>
+    `
   });
 };
 
 const sendOrderStatusEmail = async ({ email, orderId, statut }) => {
   return sendEmail({
     to: email,
-    subject: `Mise à jour de la commande #${orderId}`,
-    text: `Le statut de votre commande #${orderId} est maintenant : ${statut}.`,
-    html: `<p>Le statut de votre commande <strong>#${orderId}</strong> a été mis à jour.</p><p>Nouveau statut : <strong>${statut}</strong></p>`
+    subject: `Statut de votre commande #${orderId}`,
+    text: `Le statut de votre commande #${orderId} a été mis à jour : ${statut}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #000;">Mise à jour de votre commande</h2>
+        <p style="font-size: 16px; color: #333;">Bonjour,</p>
+        <p style="font-size: 16px; color: #333;">Le statut de votre commande a changé !</p>
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 14px; color: #666;">Commande #${orderId}</p>
+          <p style="margin: 10px 0; font-size: 20px; color: #000; font-weight: bold;">${statut}</p>
+        </div>
+        <p style="font-size: 14px; color: #333;">Vous pouvez consulter les détails de votre commande à tout moment dans votre compte.</p>
+        <p style="font-size: 14px; color: #666;">Merci d'avoir choisi Rigoula !</p>
+      </div>
+    `
   });
 };
 
