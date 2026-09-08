@@ -19,7 +19,7 @@ services:
         scope: run
         sync: false
       - key: EMAIL_ENABLED
-        value: false
+        value: true
       - key: GMAIL_USER
         scope: run
         sync: false
