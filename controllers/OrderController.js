@@ -250,11 +250,14 @@ class OrderController {
   static async updateOrderStatus(req, res) {
     try {
       const { statut } = req.body;
+      console.log('🔵 updateOrderStatus appelée, ID:', req.params.id, 'nouveau statut:', statut);
+
       const { getDb } = require('../config/db');
       const mongoDb = await getDb();
       const orderId = toNumber(req.params.id);
       const order = await mongoDb.collection('commandes').findOne({ id: orderId });
       if (!order) {
+        console.log('🔴 Commande non trouvée pour orderId:', orderId);
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
 
@@ -266,19 +269,28 @@ class OrderController {
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
 
+      console.log('🟢 Statut mis à jour en base. order.user_id =', order.user_id, '(type:', typeof order.user_id, ')');
+
       const user = await mongoDb.collection('users').findOne({ id: toNumber(order.user_id) });
+      console.log('👤 User trouvé:', user);
+
       if (user?.email) {
         sendOrderStatusEmail({
           email: user.email,
           orderId: req.params.id,
           statut
+        }).then(() => {
+          console.log('✅ Email statut envoyé à', user.email);
         }).catch((mailErr) => {
           console.error('⚠️ Email statut commande non envoyé:', mailErr.message);
         });
+      } else {
+        console.log('❌ Aucun email trouvé pour user_id:', order.user_id);
       }
 
       res.json({ success: true, message: 'Statut mis à jour' });
     } catch (error) {
+      console.error('🔴 Erreur updateOrderStatus:', error.message);
       res.status(500).json({ error: error.message });
     }
   }

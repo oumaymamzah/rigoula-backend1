@@ -28,8 +28,8 @@
 6. Configurez les variables d'environnement :
    - `MONGODB_URI`: Votre chaîne de connexion MongoDB Atlas
    - `JWT_SECRET`: Une clé secrète forte (utilisez `openssl rand -base64 32`)
-   - `EMAIL_USER`: Votre email Gmail
-   - `EMAIL_PASSWORD`: Votre mot de passe d'application Gmail (activation 2FA requise)
+   - `GMAIL_USER`: Votre email Gmail
+   - `GMAIL_APP_PASSWORD`: Votre mot de passe d'application Gmail (activation 2FA requise)
 
 ### 4. Configurer le fichier `.env` sur Render
 Dans le dashboard Render :
@@ -46,8 +46,8 @@ Dans le dashboard Render :
 |----------|---------|-------------|
 | `MONGODB_URI` | `mongodb+srv://...` | Connexion MongoDB Atlas |
 | `JWT_SECRET` | `random_string_32_chars` | Clé secrète JWT |
-| `EMAIL_USER` | `your_email@gmail.com` | Email pour l'envoi de messages |
-| `EMAIL_PASSWORD` | `app_password` | Mot de passe d'application Gmail |
+| `GMAIL_USER` | `your_email@gmail.com` | Email pour l'envoi de messages |
+| `GMAIL_APP_PASSWORD` | `app_password` | Mot de passe d'application Gmail |
 | `NODE_ENV` | `production` | Environnement de production |
 | `PORT` | `10000` | Port d'écoute (Render utilise 10000) |
 
@@ -56,7 +56,7 @@ Dans le dashboard Render :
 2. Allez dans [App Passwords](https://myaccount.google.com/apppasswords)
 3. Sélectionnez Mail et Windows
 4. Générez un mot de passe d'application
-5. Utilisez ce mot de passe dans `EMAIL_PASSWORD`
+5. Utilisez ce mot de passe dans `GMAIL_APP_PASSWORD`
 
 ## Troubleshooting
 
