@@ -15,14 +15,8 @@ const getTransporter = () => {
   }
 
   transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    auth: { user: gmailUser, pass: gmailPass },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000
+    service: 'gmail',
+    auth: { user: gmailUser, pass: gmailPass }
   });
 
   return transporter;
@@ -38,14 +32,13 @@ const sendEmail = async ({ to, subject, html, text }) => {
     throw new Error('EMAIL_FROM ou GMAIL_USER requis');
   }
 
-  const mailer = getTransporter();
-  await mailer.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html
-  });
+  const message = { from, to, subject, text, html };
+  try {
+    await getTransporter().sendMail(message);
+  } catch (error) {
+    transporter = null;
+    await getTransporter().sendMail(message);
+  }
 
   return { sent: true };
 };
