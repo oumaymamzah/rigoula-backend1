@@ -21,20 +21,15 @@ class UserController {
       // Create user
       const userId = await User.create({ nom, prenom, email, password, telephone });
 
-      // Notification email (tentative immédiate)
-      let emailNotice = null;
-      try {
-        await sendWelcomeEmail({ email, nom, prenom });
-      } catch (mailErr) {
+      // Envoi de l'email en arrière-plan pour ne pas ralentir l'inscription
+      sendWelcomeEmail({ email, nom, prenom }).catch((mailErr) => {
         console.error('⚠️ Email inscription non envoyé:', mailErr.message);
-        emailNotice = 'Inscription réussie, mais email de bienvenue non envoyé.';
-      }
+      });
 
       res.status(201).json({
         success: true,
         message: 'Inscription réussie',
-        userId,
-        emailNotice
+        userId
       });
     } catch (error) {
       res.status(500).json({ error: error.message });

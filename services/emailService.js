@@ -16,7 +16,10 @@ const getTransporter = () => {
 
   transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user: gmailUser, pass: gmailPass }
+    auth: { user: gmailUser, pass: gmailPass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000
   });
 
   return transporter;
@@ -49,15 +52,15 @@ const sendWelcomeEmail = async ({ email, nom, prenom }) => {
 
   return sendEmail({
     to: email,
-    subject: 'Bienvenue sur Rigoula !',
-    text: `Bonjour ${fullName}, bienvenue sur Rigoula ! Votre compte a été créé avec succès. Connectez-vous maintenant et commencez à explorer nos produits.`,
+    subject: 'Bienvenue sur Rigoula ',
+    text: `Bonjour ${fullName}, bienvenue sur Rigoula  Votre compte a été créé avec succès. Connectez-vous maintenant et commencez à explorer nos produits.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #000;">Bienvenue sur Rigoula !</h2>
+        <h2 style="color: #000;">Bienvenue sur Rigoula </h2>
         <p style="font-size: 16px; color: #333;">Bonjour <strong>${fullName}</strong>,</p>
-        <p style="font-size: 16px; color: #333;">Votre inscription a été confirmée avec succès !</p>
-        <p style="font-size: 16px; color: #333;">Vous pouvez maintenant vous connecter à votre compte et découvrir tous nos produits et services.</p>
-        <p style="font-size: 14px; color: #666;">Merci de votre confiance !</p>
+        <p style="font-size: 16px; color: #333;">Votre inscription a été confirmée avec succès </p>
+        <p style="font-size: 16px; color: #333;">Vous pouvez maintenant vous connecter à votre compte et découvrir tous nos produits .</p>
+        <p style="font-size: 14px; color: #666;">Merci de votre confiance </p>
       </div>
     `
   });
@@ -72,13 +75,13 @@ const sendOrderStatusEmail = async ({ email, orderId, statut }) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #000;">Mise à jour de votre commande</h2>
         <p style="font-size: 16px; color: #333;">Bonjour,</p>
-        <p style="font-size: 16px; color: #333;">Le statut de votre commande a changé !</p>
+        <p style="font-size: 16px; color: #333;">Le statut de votre commande a changé </p>
         <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
           <p style="margin: 0; font-size: 14px; color: #666;">Commande #${orderId}</p>
           <p style="margin: 10px 0; font-size: 20px; color: #000; font-weight: bold;">${statut}</p>
         </div>
         <p style="font-size: 14px; color: #333;">Vous pouvez consulter les détails de votre commande à tout moment dans votre compte.</p>
-        <p style="font-size: 14px; color: #666;">Merci d'avoir choisi Rigoula !</p>
+        <p style="font-size: 14px; color: #666;">Merci d'avoir choisi Rigoula </p>
       </div>
     `
   });
