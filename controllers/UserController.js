@@ -12,6 +12,10 @@ class UserController {
         return res.status(400).json({ message: 'Tous les champs sont obligatoires' });
       }
 
+      if (password.length < 6) {
+        return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+      }
+
       // Check if email exists
       const existingUser = await User.findByEmail(email);
       if (existingUser) {
@@ -128,6 +132,10 @@ class UserController {
     try {
       const { nom, prenom, email, password, telephone, role } = req.body;
 
+      if (!password || password.length < 6) {
+        return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+      }
+
       const existingUser = await User.findByEmail(email);
       if (existingUser) {
         return res.status(400).json({ message: 'Cet email est déjà utilisé' });
@@ -148,6 +156,11 @@ class UserController {
   static async updateUser(req, res) {
     try {
       const { nom, prenom, email, telephone, role, password } = req.body;
+
+      if (password !== undefined && password.length < 6) {
+        return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+      }
+
       const updated = await User.update(req.params.id, { nom, prenom, email, telephone, role, password });
       if (!updated) {
         return res.status(404).json({ message: 'Utilisateur non trouvé' });

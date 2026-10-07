@@ -32,13 +32,14 @@ const sendEmail = async ({ to, subject, html, text }) => {
     throw new Error('EMAIL_FROM ou GMAIL_USER requis');
   }
 
-  const message = { from, to, subject, text, html };
-  try {
-    await getTransporter().sendMail(message);
-  } catch (error) {
-    transporter = null;
-    await getTransporter().sendMail(message);
-  }
+    const message = { from, to, subject, text, html };
+
+    try {
+      await getTransporter().sendMail(message);
+    } catch (error) {
+      transporter = null;
+      await getTransporter().sendMail(message);
+    }
 
   return { sent: true };
 };
@@ -63,10 +64,19 @@ const sendWelcomeEmail = async ({ email, nom, prenom }) => {
 };
 
 const sendOrderStatusEmail = async ({ email, orderId, statut }) => {
+  const statusLabels = {
+    en_attente: 'En attente',
+    confirmee: 'Confirmée',
+    expediee: 'Expédiée',
+    livree: 'Livrée',
+    annulee: 'Annulée'
+  };
+  const displayStatus = statusLabels[statut] || statut;
+
   return sendEmail({
     to: email,
     subject: `Statut de votre commande #${orderId}`,
-    text: `Le statut de votre commande #${orderId} a été mis à jour : ${statut}`,
+    text: `Le statut de votre commande #${orderId} a été mis à jour : ${displayStatus}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #000;">Mise à jour de votre commande</h2>
@@ -74,7 +84,7 @@ const sendOrderStatusEmail = async ({ email, orderId, statut }) => {
         <p style="font-size: 16px; color: #333;">Le statut de votre commande a changé </p>
         <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
           <p style="margin: 0; font-size: 14px; color: #666;">Commande #${orderId}</p>
-          <p style="margin: 10px 0; font-size: 20px; color: #000; font-weight: bold;">${statut}</p>
+          <p style="margin: 10px 0; font-size: 20px; color: #000; font-weight: bold;">${displayStatus}</p>
         </div>
         <p style="font-size: 14px; color: #333;">Vous pouvez consulter les détails de votre commande à tout moment dans votre compte.</p>
         <p style="font-size: 14px; color: #666;">Merci d'avoir choisi Rigoula </p>

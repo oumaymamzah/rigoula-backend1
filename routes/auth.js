@@ -26,6 +26,10 @@ router.put('/change-password', require('../middleware/auth').verifyToken, async 
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ message: 'Ancien et nouveau mot de passe requis' });
     }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+    }
     
     const db = await getDb();
     const user = await db.collection('users').findOne({ id: toNumber(req.user.id) }, { projection: { password: 1 } });
